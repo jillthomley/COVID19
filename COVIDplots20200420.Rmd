@@ -1,0 +1,434 @@
+---
+title: "COVID-19 Visualizations"
+author: "Created by Jill E. Thomley"
+date: '`r format(Sys.time(), "%A, %B %d, %Y @ %I:%M %p")`'
+output: 
+  html_document: 
+    theme: yeti
+    highlight: textmate
+    code_folding: hide
+---
+
+```{r globaloptions, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+library(scales)
+```
+
+#### **What is COVID-19?**
+
+COVID-19 is the name for the disease caused by the novel coronavirus SARS-CoV-2 and is an acronym that stands for **co**rona**vi**rus **d**isease of 20**19**. The World Health Organization (WHO) designated the name on February 11, 2020. The specifics of how the virus spreads and the impacts of the disease it causes are still being discovered.
+
+```{r datasets}
+stateFIPS <- read_csv("FIPS50.csv")
+
+casesbyday <- read_csv("CASES_BY_DAY.csv") %>% 
+  mutate(dailychange = c(NA, diff(Cases)))
+
+data0 <- read_csv("US_MAP_DATA_20200417.csv", skip = 1) %>% 
+  right_join(stateFIPS) %>% 
+  mutate(Mortality = Deaths/Cases,
+         Date = as.Date("2020-04-17"),
+         Time = "time0")
+
+data1 <- read_csv("US_MAP_DATA_20200420.csv", skip = 1) %>% 
+  right_join(stateFIPS) %>% 
+  mutate(Mortality = Deaths/Cases,
+         Date = as.Date("2020-04-20"),
+         Time = "time1")
+
+data2 <- rbind(data0, data1)
+```
+
+```{r choosestates}
+date0 <- "April 17 @5:48pm"
+date1 <- "April 20 @5:49pm" 
+states <- c("MI", "NC", "OH")
+```
+
+#### **Total Number of Cases**
+
+Cases are primarily people whose infection has been confirmed by testing, with a small fraction being individuals whose illness is determined by medical professionals to have a high probability of being COVID19, due to their presentation and symptoms. Many will be confirmed later by a test. For example, on 04/20/2020, the CDC noted that 1,696 cases (`r round(100 * 1696 / 746625, 2)`%) out of the 746,625  listed on its [**web site**](https://www.cdc.gov/coronavirus/2019-ncov/cases-updates/cases-in-us.html) were considered probable. These counts underestimate the actual number of people infected with SARS-CoV-2 by an unknown amount for many reasons. Our knowledge is still evolving, but without more widespread testing in the United States to compensate for these issues, these values are the best we have to work with. 
+
+* Someone who has been infected with COVID-19 may have only a mild form of illness and show few symptoms, or even none at all (asymptomatic). Researchers who studied the people onboard the Diamond Princess cruise ship found the proportion of asymptomatic people to be about 18%. On the other hand, a study published in the *British Medical Journal* earlier in April suggested that it might be nearly 80%. 
+* When someone is infected, the symptoms do not always appear immediately, even if they go on to have a severe case. As of 04/20/2020, the CDC stated that estimates of the incubation period for COVID-19 range from about 1-14 days, with the most common being around five days.  
+* There are significant delays in testing and reporting, and not everyone who is infected gets tested or seeks medical care. In the United States, testing has largely been limited to those who have displayed symptoms or had a high risk due to contact with an infected person or persons.
+* States may use different methods to count confirmed cases in their jurisdictions. In the absence of a coordinated national testing effort, some differences between states may also be due to the availability of tests and any programs they initiate to expand their community testing.
+
+```{r cases, fig.height=8, fig.width=6}
+datastates  <- data1 %>% filter(ABBR %in% states)
+mediancases <- data1 %>% summarize(rate = median(Cases)) %>% pull()
+
+data1 %>% 
+  ggplot(aes(x = reorder(Name, Cases), 
+             y = Cases, 
+             color = Cases > mediancases,
+             fill = Cases > mediancases)) +
+  geom_bar(stat = "identity", width = 0.1) +
+  geom_point() +
+  geom_point(aes(x = Name, y = Cases),
+             data = datastates,
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(aes(label = paste(Name, "=", format(Cases, big.mark = ",")), 
+                               x = Name, 
+                               y = Cases),
+             data = datastates,
+             hjust = 0, 
+             nudge_y = 10000, 
+             color = "white", 
+             fill = "#103E5D") +
+  scale_x_discrete(expand = c(.03, .03)) +
+  scale_y_continuous(label = comma, breaks = seq(0, 300000, 20000)) +
+  scale_color_brewer(palette = "Paired") +
+  labs(title = "Total Number of COVID-19 Cases Reported to CDC",
+       subtitle = paste("data as of ", 
+                        date1,
+                        ", median number of cases = ", 
+                        mediancases, 
+                        sep = ""),
+       x = NULL, 
+       y = "number of reported cases",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075)
+```
+
+```{r dailycases, fig.height=6, fig.width=8}
+casesbyday %>% 
+  ggplot(aes(x = Date, y = Cases)) +
+  geom_point() +
+  geom_line() +
+  scale_x_date(date_labels = "%b %d", date_breaks = "1 week") +
+  scale_y_continuous(labels = comma, breaks = seq(0, 10^6, 50000)) +
+  labs(title = "Total Number of COVID-19 Cases Reported to CDC",
+       subtitle = "most US stay-at-home orders were enacted between March 23 and April 6",
+       x = NULL, 
+       y = "number of reported cases",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect", 
+           xmin = as.Date("2020-03-23"), 
+           xmax = as.Date("2020-04-06"),
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.10)
+```
+
+#### **3-Day Change in Reported Number of Cases**
+
+The median change in cases reported to the CDC over the last week is `r data1 %>% summarize(med = median(CasesInLast7Days))`. The median change over the last 3 days is close to 3/7 of this value, which suggests perhaps a more linear versus exponential increase. We can also see a linear progression in the time series plot of cases per day above, starting after April 5. This means there has been less than exponential growth in cases, which is what social distancing is meant to accomplish. For the last two weeks, the number of new cases per day has typically varied in the range of 20,000 to 35,000.
+
+```{r casesdelta, fig.height=8, fig.width=6}
+dataC <- data2 %>% 
+  select(Time, Name, ABBR, Cases) %>% 
+  pivot_wider(names_from = Time, values_from = Cases) %>% 
+  mutate(Change = time1 - time0)
+
+datastates   <- dataC %>% filter(ABBR %in% states)
+medianchange <- dataC %>% summarize(rate = median(Change)) %>% pull()
+
+dataC %>% 
+  ggplot(aes(x = reorder(Name, Change), y = Change, 
+             color = Change > medianchange,
+             fill = Change > medianchange)) +
+  geom_bar(stat = "identity", width = 0.1) +
+  geom_point() +
+  geom_point(aes(x = Name, y = Change),
+             data = datastates,
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(aes(label = paste(Name, "=", format(Change, big.mark = ",")), 
+                 x = Name, 
+                 y = Change),
+             data = datastates,
+             hjust = 0, 
+             nudge_y = 1750, 
+             color = "white", 
+             fill = "#103E5D") +
+  scale_x_discrete(expand = c(.03, .03)) +
+  scale_y_continuous(label = comma, breaks = seq(0, 30000, 2000)) +
+  scale_color_brewer(palette = "Paired") +
+  labs(title = "3-Day Change in COVID-19 Cases Reported to CDC",
+       subtitle = paste(date0,
+                        " to ", 
+                        date1,
+                        ", median change = ", 
+                        medianchange, 
+                        sep = ""),
+       x = NULL, 
+       y = "increase in reported cases",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075)
+```
+
+```{r dailycaseschange, fig.height=6, fig.width=8}
+casesbyday %>% 
+  filter(Date > "2020-03-15" ) %>% 
+  ggplot(aes(x = Date, y = dailychange)) +
+  geom_bar(stat = "identity", width = 0.5, color = "gray", fill = "#103E5D") +
+  scale_x_date(date_labels = "%b %d", 
+               date_breaks = "1 week") +
+  scale_y_continuous(labels = comma, breaks = seq(0, 10^5, 5000)) +
+  labs(title = "Number of New COVID-19 Cases Reported to CDC per Day",
+       subtitle = "most US stay-at-home orders were enacted between March 23 and April 6",
+       x = NULL, 
+       y = "number of new reported cases",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect", 
+           xmin = as.Date("2020-03-23"), 
+           xmax = as.Date("2020-04-06"),
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.10)
+```
+
+#### **Case Rate per 100,000 Population**
+
+One might naturally expect that states with larger populations will have more COVID-19 cases, so it can be valuable to standardize the number of cases to take population differences into account. Here, total counts have been divided by each state's population. For example, North Carolina's rate is a relatively low `r data1$RatePer100000[data1$ABBR == "NC"]` infected individuals out of every 100,000 people in its population, while Michigan has relatively high `r data1$RatePer100000[data1$ABBR == "MI"]` reported infected individuals out of every 100,000 people in its population.
+
+```{r caserate, fig.height=8, fig.width=6}
+datastates <- data1 %>% filter(ABBR %in% states)
+medianrate <- data1 %>% summarize(rate = median(RatePer100000)) %>% pull()
+
+data1 %>% 
+ggplot(aes(x = reorder(Name, RatePer100000), 
+                 y = RatePer100000, 
+                 color = RatePer100000 > medianrate,
+                 fill = RatePer100000 > medianrate)) +
+  geom_bar(stat = "identity", width = 0.1) +
+  geom_point() +
+  geom_point(aes(x = Name, y = RatePer100000), 
+             data = datastates,
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(aes(label = paste(Name, "=", RatePer100000), 
+                 x = Name, 
+                 y = RatePer100000),
+             data = datastates,
+             hjust = 0, 
+             nudge_y = 100, 
+             color = "white", 
+             fill = "#103E5D") +
+  scale_x_discrete(expand = c(.03, .03)) +
+  scale_y_continuous(breaks = seq(0, 2000, 100)) +
+  scale_color_brewer(palette = "Paired") +
+  labs(title = "Reported COVID-19 Cases per 100,000 Population",
+       subtitle = paste("data as of ", 
+                        date1,
+                        ", median = ",
+                        medianrate,
+                        " per 100,000", 
+                        sep = ""),
+       x = NULL, 
+       y = "cases per 100,000 population",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075)
+```
+
+#### **Case Fatality Rate**
+
+The ratio between number of confirmed deaths and number of confirmed cases is the **case fatality rate**. It is not the same as the true risk for an infected person, especially in a novel and quickly-evolving situation like COVID-19. The **crude mortality rate** (not shown here) is the probability that any individual in the population will die from the disease and is found by dividing the number of deaths from the disease by the total population. For the US at this moment, the estimated crude mortality rate is about 39,000 out of 331 million people (`r format(round(39000/331000000, 4), scientific = FALSE)` or `r 100* round(39000/331000000, 4)`%). However, we should note that this is only since January 21,2020 vs. the annual rates we are used to seeing for other diseases, and the number of confirmed deaths is likely to increase. 
+
+Ultimately, these data will help us determine the **infection fatality rate**: if someone is infected, how likely is it that they will die? We would calculate this by dividing the number of deaths by the total number of cases, not just confirmed cases. In the absence of widespread testing including asymptomatic people, the denominator remains largely unknown. We may not know this value until well after the fact, when we can test a broader sample of people for antibodies, assuming the virus generates enough to detect in the long run. For now, case fatalities is the best we can do, and it is useful for some comparisons.
+
+```{r mortalityrate, fig.height=8, fig.width=6}
+datastates <- data1 %>% filter(ABBR %in% states)
+nationalrate <- data1 %>% summarize(rate = sum(Deaths)/sum(Cases)) %>% pull(rate)
+
+data1 %>% 
+  ggplot(aes(x = reorder(Name, Mortality),
+             y = Mortality,
+             color = Mortality > nationalrate,
+             fill = Mortality > nationalrate)) +
+  geom_bar(stat = "identity",
+           width = 0.1) +
+  geom_point() +
+  geom_point(datastates,
+             mapping = aes(x = Name, y = Mortality),
+             color = "#103E5D",
+             size = 3) +
+  geom_label(aes(label = paste(Name, " = ", 100 * round(Mortality, 4), "%", sep = ""), 
+                 x = Name, 
+                 y = Mortality),
+             data = datastates,
+             hjust = 0,
+             nudge_y = 0.004,
+             color = "white",
+             fill = "#103E5D") +
+  scale_x_discrete(expand = c(.03, .03)) +
+  scale_y_continuous(breaks = seq(0, .20, .01), limits = c(0, 0.12)) +
+  scale_color_brewer(palette = "Paired") + 
+  labs(title = "COVID-19 Case Fatality Rate (Deaths/Cases)",
+       subtitle = paste("data as of ", 
+                        date1, 
+                        ", national rate = ",
+                        100*round(nationalrate, 4),
+                        "%",
+                        sep = ""),
+       x = NULL,
+       y = "mortality rate",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.title.x = element_text(size = 12)) +
+  annotate(geom = "rect",
+           xmin = 46.5,
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect",
+           xmin = 41.5,
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect",
+           xmin = 0.5,
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect",
+           xmin = 5.5,
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075)
+```
+
+#### **Data Sources and References**
+
+The data visualizations above  were created using data downloaded the web page "[**CDC Coronnavirus Interactive**](https://www.cdc.gov/coronavirus-interactive/index.html)" and the free, open-source software `R`. Most include only data from the 50 states and District of Columbia, though the CDC collects data on all American Territories as well. These references are in no particular order right now. 
+
+
+Data
+
+* https://ourworldindata.org/covid-mortality-risk
+* https://www.cdc.gov/coronavirus-interactive/index.html
+* https://www.cdc.gov/coronavirus/2019-ncov/cases-updates/cases-in-us.html
+* https://www.nytimes.com/interactive/2020/us/coronavirus-stay-at-home-order.html
+
+Other
+
+* https://www.goodrx.com/blog/what-does-covid-19-mean-who-named-it/
+* http://med.stanford.edu/content/dam/sm/id/documents/COVID/AsymptCOVID_TransmissionShip.pdf
+* https://www.bmj.com/content/369/bmj.m1375
+* https://www.who.int/news-room/q-a-detail/q-a-coronaviruses
+
+***
+```{r}
+sessionInfo()
+```

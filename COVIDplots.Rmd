@@ -1,0 +1,316 @@
+---
+title: "COVID-19 Visualizations"
+author: "Created by Jill E. Thomley"
+date: '`r format(Sys.time(), "%A, %B %d, %Y @ %I:%M %p")`'
+output: 
+  html_document: 
+    theme: yeti
+    highlight: textmate
+    code_folding: hide
+---
+
+```{r globaloptions, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
+```
+
+```{r}
+library(tidyverse)
+library(scales)
+```
+
+#### Data Sources
+
+* https://www.cdc.gov/coronavirus/2019-ncov/cases-updates/cases-in-us.html
+* https://www.cdc.gov/coronavirus-interactive/index.html
+* https://www.nytimes.com/interactive/2020/us/coronavirus-stay-at-home-order.html
+
+```{r datasets}
+stateFIPS <- read_csv("FIPS50.csv")
+
+data <- read_csv("US_MAP_DATA_20200417.csv", skip = 1) %>% 
+  right_join(stateFIPS) %>% 
+  mutate(Mortality = Deaths/Cases)
+
+dataNC <- data %>% 
+  filter(ABBR == "NC")
+```
+
+#### Total Number of Confirmed Cases
+
+```{r cases, fig.height=8, fig.width=6}
+
+mediancases <- data %>% 
+  summarize(rate = median(Cases)) %>% 
+  pull()
+
+ggplot(data, aes(x = reorder(Name, Cases), 
+                 y = Cases, 
+                 color = Cases > mediancases,
+                 fill = Cases > mediancases)) +
+  geom_bar(stat = "identity", width = 0.1) +
+  geom_point() +
+  geom_point(dataNC, 
+             mapping = aes(x = Name, y = Cases), 
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(dataNC, 
+             mapping = aes(label = Name, x = Name, y = Cases),
+             hjust = 0, 
+             nudge_y = 10000, 
+             color = "white", 
+             fill = "#103E5D") +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075) +
+  scale_y_continuous(label = comma, breaks = seq(0, 300000, 25000)) +
+  labs(title = "Total Number of Confirmed COVID-19 Cases",
+       subtitle = paste("CDC data as of April 17 @5:48pm, median cases =", mediancases),
+       x = NULL, 
+       y = "number of confirmed cases",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  scale_color_brewer(palette = "Paired")
+```
+
+#### Case Rate per 100,000 Population by State
+
+```{r caserate, fig.height=8, fig.width=6}
+
+medianrate <- data %>% 
+  summarize(rate = median(RatePer100000)) %>% 
+  pull()
+
+ggplot(data, aes(x = reorder(Name, RatePer100000), 
+                 y = RatePer100000, 
+                 color = RatePer100000 > medianrate,
+                 fill = RatePer100000 > medianrate)) +
+  geom_bar(stat = "identity", 
+           width = 0.1) +
+  geom_point() +
+  geom_point(dataNC, 
+             mapping = aes(x = Name, y = RatePer100000), 
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(dataNC, 
+             mapping = aes(label = Name, x = Name, y = RatePer100000),
+             hjust = 0, 
+             nudge_y = 100, 
+             color = "white", 
+             fill = "#103E5D") +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075) +
+  scale_y_continuous(breaks = seq(0, 2000, 100)) +
+  labs(title = "COVID-19 Cases per 100,000 Population",
+       subtitle = paste("CDC data as of April 17 @5:48pm, median =", 
+                        medianrate,
+                        "per 100,000"),
+       x = NULL, 
+       y = "cases per 100,000 population",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.title.x = element_text(size = 12)) +
+  scale_color_brewer(palette = "Paired")
+
+```
+
+#### Confirmed Cases in Last 7 Days
+
+```{r cases7days, fig.height=8, fig.width=6}
+
+mediancases7 <- data %>% 
+  summarize(rate = median(CasesInLast7Days)) %>% 
+  pull()
+
+ggplot(data, aes(x = reorder(Name, CasesInLast7Days), 
+                 y = CasesInLast7Days, 
+                 color = CasesInLast7Days > mediancases7,
+                 fill = CasesInLast7Days > mediancases7)) +
+  geom_bar(stat = "identity", width = 0.1) +
+  geom_point() +
+  geom_point(dataNC, 
+             mapping = aes(x = Name, y = CasesInLast7Days), 
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(dataNC, 
+             mapping = aes(label = Name, x = Name, y = CasesInLast7Days),
+             hjust = 0, 
+             nudge_y = 5000, 
+             color = "white", 
+             fill = "#103E5D") +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075) +
+  scale_y_continuous(label = comma, breaks = seq(0, 300000, 5000)) +
+  labs(title = "Number of COVID-19 Cases in the Last 7 Days",
+       subtitle = paste("CDC data as of April 17 @5:48pm, median cases =", mediancases7),
+       x = NULL, 
+       y = "number of confirmed cases in the last 7 days",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 12)) +
+  scale_color_brewer(palette = "Paired")
+
+```
+
+#### Mortality Rate by State
+
+```{r mortalityrate, fig.height=8, fig.width=6}
+
+nationalrate <- data %>%
+  summarize(rate = sum(Deaths)/sum(Cases)) %>% 
+  pull(rate)
+
+ggplot(data, aes(x = reorder(Name, Mortality), 
+                 y = Mortality, 
+                 color = Mortality > nationalrate,
+                 fill = Mortality > nationalrate)) +
+  geom_bar(stat = "identity", 
+           width = 0.1) +
+  geom_point() +
+  geom_point(dataNC, 
+             mapping = aes(x = Name, y = Mortality), 
+             color = "#103E5D", 
+             size = 3) +
+  geom_label(dataNC, 
+             mapping = aes(label = Name, x = Name, y = Mortality),
+             hjust = 0, 
+             nudge_y = 0.004, 
+             color = "white", 
+             fill = "#103E5D") +
+  annotate(geom = "rect", 
+           xmin = 46.5, 
+           xmax = 51.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 41.5, 
+           xmax = 46.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#B41F78",
+           alpha = 0.075) +
+  annotate(geom = "rect", 
+           xmin = 0.5, 
+           xmax = 5.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.15) +
+  annotate(geom = "rect", 
+           xmin = 5.5, 
+           xmax = 10.5,
+           ymin = -Inf,
+           ymax = Inf,
+           fill = "#4C7314",
+           alpha = 0.075) +
+  geom_hline(yintercept = nationalrate, 
+             color = "#B41F78", 
+             linetype = "dashed") +
+  scale_y_continuous(breaks = seq(0, .10, .01)) +
+  labs(title = "COVID-19 Mortality Rate (Deaths/Cases)",
+       subtitle = paste("CDC data as of April 17 @5:48pm, national rate = ", 
+                        100*round(nationalrate, 4), 
+                        "%", 
+                        sep = ""),
+       x = NULL, 
+       y = "mortality rate",
+       caption = "source: https://www.cdc.gov/coronavirus-interactive/index.html") +
+  coord_flip() +
+  theme_linedraw() +
+  theme(legend.position = "none",
+        axis.title.x = element_text(size = 12)) +
+  scale_color_brewer(palette = "Paired")
+
+```
+
+***
+```{r}
+sessionInfo()
+```
